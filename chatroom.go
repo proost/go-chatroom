@@ -7,11 +7,17 @@ import (
 	"net"
 )
 
-type channel chan<- string
+type member struct {
+	channel chan<- string
+	name string
+}
 
-var messages = make(chan string)
-
-var members = make(map[string]channel)
+var (
+	entering = make(chan member)
+	leaving = make(chan member)
+	messages = make(chan string)
+	checking = make(chan bool)
+)
 
 func main() {
 	chatRoom, err := net.Listen("tcp", "localhost:8000")
@@ -33,12 +39,24 @@ func main() {
 }
 
 func broadcast() {
+	members := make(map[string]member)
+
 	for {
 		select {
 		case msg := <-messages:
-			for _, ch := range members {
-				ch <- msg
+			for _, m := range members {
+				m.channel <- msg
 			}
+		case newbie := <-entering:
+			if _, ok := members[newbie.name]; ok {
+				checking<- false
+			} else {
+				members[newbie.name] = newbie
+				checking<- true
+			}
+		case leaved := <-leaving:
+			delete(members, leaved.name)
+			close(leaved.channel)
 		}
 	}
 }
@@ -54,10 +72,9 @@ func enterChatRoom(conn net.Conn) {
 			typed := input.Text()
 
 			if typed == "exit()" {
-				messages <- name + " has left"
+				leaving <- member{ch, name}
 
-				delete(members, name)
-				close(ch)
+				messages <- name + " has left"
 
 				conn.Close()
 				return
@@ -80,12 +97,15 @@ func setupChatting(conn net.Conn) (chan<- string, string) {
 			continue
 		}
 
-		if _, ok := members[name]; ok {
+		newbie := member{ch, name}
+
+		entering<- newbie
+		isExist := <- checking
+		if isExist {
+			break
+		} else {
 			fmt.Fprintln(conn, "Name is already exist")
 			name = askName(conn)
-		} else {
-			members[name] = ch
-			break
 		}
 	}
 
