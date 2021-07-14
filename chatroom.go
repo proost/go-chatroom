@@ -9,12 +9,12 @@ import (
 
 type member struct {
 	channel chan<- string
-	name string
+	name    string
 }
 
 var (
 	entering = make(chan member)
-	leaving = make(chan member)
+	leaving  = make(chan member)
 	messages = make(chan string)
 	checking = make(chan bool)
 )
@@ -49,10 +49,10 @@ func broadcast() {
 			}
 		case newbie := <-entering:
 			if _, ok := members[newbie.name]; ok {
-				checking<- false
+				checking <- false
 			} else {
 				members[newbie.name] = newbie
-				checking<- true
+				checking <- true
 			}
 		case leaved := <-leaving:
 			delete(members, leaved.name)
@@ -99,8 +99,8 @@ func setupChatting(conn net.Conn) (chan<- string, string) {
 
 		newbie := member{ch, name}
 
-		entering<- newbie
-		isExist := <- checking
+		entering <- newbie
+		isExist := <-checking
 		if isExist {
 			break
 		} else {
@@ -112,7 +112,7 @@ func setupChatting(conn net.Conn) (chan<- string, string) {
 	return ch, name
 }
 
-func clientWriter(conn net.Conn, ch <- chan string) {
+func clientWriter(conn net.Conn, ch <-chan string) {
 	for msg := range ch {
 		fmt.Fprintln(conn, msg)
 	}
@@ -121,7 +121,7 @@ func clientWriter(conn net.Conn, ch <- chan string) {
 func askName(conn net.Conn) string {
 	fmt.Fprintln(conn, "Enter your name: ")
 	name, _ := bufio.NewReader(conn).ReadString('\n')
-	return name[:len(name) - 1]
+	return name[:len(name)-1]
 }
 
 func sendWelcomeMessage(name string, ch chan<- string) {
